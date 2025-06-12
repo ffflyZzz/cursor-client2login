@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>重构代码测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .test-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        .test-button:hover {
+            background: #0056b3;
+        }
+        
+        .test-result {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        
+        .success { border-color: #28a745; background: #d4edda; }
+        .error { border-color: #dc3545; background: #f8d7da; }
+        .info { border-color: #17a2b8; background: #d1ecf1; }
+        
+        #messageArea {
+            min-height: 50px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .message {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 5px 0;
+        }
+        
+        .message.success { background: #d4edda; border: 1px solid #28a745; }
+        .message.error { background: #f8d7da; border: 1px solid #dc3545; }
+        .message.info { background: #d1ecf1; border: 1px solid #17a2b8; }
+        .message.warning { background: #fff3cd; border: 1px solid #ffc107; }
+        
+        .loading::after {
+            content: ' ⏳';
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Cursor Client2Login - 重构代码测试</h1>
+    
+    <div class="test-section">
+        <h2>📋 DOM管理测试</h2>
+        <div id="messageArea"></div>
+        <button class="test-button" onclick="testDOMManager()">测试DOM管理器</button>
+        <div id="testResult1" class="test-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>💬 UI管理测试</h2>
+        <button class="test-button" onclick="testUIManager()">测试消息显示</button>
+        <button class="test-button" onclick="testLoadingManager()">测试加载状态</button>
+        <div id="testResult2" class="test-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>⚠️ 错误处理测试</h2>
+        <button class="test-button" onclick="testErrorHandler()">测试错误处理</button>
+        <div id="testResult3" class="test-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>📊 状态管理测试</h2>
+        <button class="test-button" onclick="testAppState()">测试应用状态</button>
+        <div id="testResult4" class="test-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>🔧 调试功能测试</h2>
+        <button class="test-button" onclick="testDebugFunctions()">测试调试功能</button>
+        <div id="testResult5" class="test-result"></div>
+    </div>
+
+    <!-- 隐藏的DOM元素，用于减少测试环境中的警告 -->
+    <div style="display: none;">
+        <div id="currentStatus"></div>
+        <div id="accountList"></div>
+        <input id="emailInput" />
+        <input id="useridInput" />
+        <textarea id="accessTokenInput"></textarea>
+        <input id="accessTokenFile" />
+        <button id="importDataBtn"></button>
+        <button id="autoReadBtn"></button>
+        <button id="processFilesBtn"></button>
+        <button id="refreshAccountsBtn"></button>
+        <button id="openDashboardBtn"></button>
+        <button id="clearDataBtn"></button>
+        <div id="jsonDropZone"></div>
+        <input id="jsonFileInput" type="file" />
+        <div id="nativeHostInfo"></div>
+        <button id="showInstallGuide"></button>
+    </div>
+
+    <!-- 隐藏的DOM元素，用于减少测试环境中的警告 -->
+    <div style="display: none;">
+        <div id="currentStatus"></div>
+        <div id="accountList"></div>
+        <input id="emailInput" />
+        <input id="useridInput" />
+        <textarea id="accessTokenInput"></textarea>
+        <input id="accessTokenFile" />
+        <button id="importDataBtn"></button>
+        <button id="autoReadBtn"></button>
+        <button id="processFilesBtn"></button>
+        <button id="refreshAccountsBtn"></button>
+        <button id="openDashboardBtn"></button>
+        <button id="clearDataBtn"></button>
+        <div id="jsonDropZone"></div>
+        <input id="jsonFileInput" type="file" />
+        <div id="nativeHostInfo"></div>
+        <button id="showInstallGuide"></button>
+    </div>
+
+    <!-- 模拟Chrome扩展API -->
+    <script>
+        // 模拟Chrome扩展API用于测试
+        window.chrome = {
+            runtime: {
+                id: 'test-extension-id',
+                sendMessage: function(message, callback) {
+                    console.log('模拟发送消息:', message);
+                    setTimeout(() => {
+                        if (callback && typeof callback === 'function') {
+                            // 根据消息类型返回不同的模拟响应
+                            if (message.action === 'validateCurrentAccountStatus') {
+                                callback({
+                                    success: false,
+                                    error: '测试环境：无法验证账户状态'
+                                });
+                            } else {
+                                callback({ success: true, message: '模拟响应' });
+                            }
+                        }
+                    }, 100);
+                },
+                sendNativeMessage: function(hostName, message, callback) {
+                    console.log('模拟原生消息:', hostName, message);
+                    setTimeout(() => {
+                        if (callback && typeof callback === 'function') {
+                            callback({ success: false, error: '测试环境：原生主机不可用' });
+                        }
+                    }, 100);
+                },
+                connect: function(extensionId, connectInfo) {
+                    console.log('模拟连接:', extensionId, connectInfo);
+                    return {
+                        postMessage: function(message) {
+                            console.log('模拟发送端口消息:', message);
+                        },
+                        onMessage: {
+                            addListener: function(callback) {
+                                console.log('模拟添加消息监听器');
+                            }
+                        },
+                        onDisconnect: {
+                            addListener: function(callback) {
+                                console.log('模拟添加断开连接监听器');
+                            }
+                        }
+                    };
+                },
+                lastError: null
+            },
+            storage: {
+                local: {
+                    get: function(keys) {
+                        console.log('模拟获取存储:', keys);
+                        return new Promise((resolve) => {
+                            setTimeout(() => {
+                                resolve({ accountList: [], currentAccount: null });
+                            }, 50);
+                        });
+                    },
+                    set: function(data) {
+                        console.log('模拟设置存储:', data);
+                        return new Promise((resolve) => {
+                            setTimeout(resolve, 50);
+                        });
+                    },
+                    clear: function() {
+                        console.log('模拟清空存储');
+                        return new Promise((resolve) => {
+                            setTimeout(resolve, 50);
+                        });
+                    }
+                }
+            }
+        };
+    </script>
+
+    <!-- 引入重构后的代码 -->
+    <script src="popup.js"></script>
+
+    <!-- 测试脚本 -->
+    <script>
+        function testDOMManager() {
+            const result = document.getElementById('testResult1');
+            try {
+                // 测试DOM管理器初始化
+                DOMManager.initialize();
+                
+                // 测试获取元素
+                const messageArea = DOMManager.get('messageArea');
+                const allElements = DOMManager.getAll();
+                
+                result.className = 'test-result success';
+                result.textContent = `✅ DOM管理器测试通过
+- 找到messageArea: ${messageArea ? '是' : '否'}
+- 初始化元素数量: ${Object.keys(allElements).length}
+- 缺失元素: ${Object.entries(allElements).filter(([,el]) => !el).map(([key]) => key).join(', ') || '无'}`;
+            } catch (error) {
+                result.className = 'test-result error';
+                result.textContent = `❌ DOM管理器测试失败: ${error.message}`;
+            }
+        }
+
+        function testUIManager() {
+            const result = document.getElementById('testResult2');
+            try {
+                // 测试消息显示
+                UIManager.showMessage('这是一条测试消息', 'info');
+                setTimeout(() => {
+                    UIManager.showMessage('这是成功消息', 'success');
+                }, 1000);
+                setTimeout(() => {
+                    UIManager.showMessage('这是警告消息', 'warning');
+                }, 2000);
+                setTimeout(() => {
+                    UIManager.showMessage('这是错误消息', 'error');
+                }, 3000);
+                
+                result.className = 'test-result success';
+                result.textContent = '✅ UI管理器测试启动，请观察消息区域的显示效果';
+            } catch (error) {
+                result.className = 'test-result error';
+                result.textContent = `❌ UI管理器测试失败: ${error.message}`;
+            }
+        }
+
+        function testLoadingManager() {
+            const result = document.getElementById('testResult2');
+            try {
+                // 创建测试按钮
+                const testBtn = document.createElement('button');
+                testBtn.id = 'testLoadingBtn';
+                testBtn.textContent = '测试按钮';
+                testBtn.className = 'test-button';
+                result.appendChild(testBtn);
+                
+                // 测试加载状态
+                LoadingManager.show('testLoadingBtn', '加载中...');
+                
+                setTimeout(() => {
+                    LoadingManager.hide('testLoadingBtn');
+                    result.className = 'test-result success';
+                    result.textContent = '✅ 加载管理器测试完成';
+                }, 2000);
+                
+            } catch (error) {
+                result.className = 'test-result error';
+                result.textContent = `❌ 加载管理器测试失败: ${error.message}`;
+            }
+        }
+
+        function testErrorHandler() {
+            const result = document.getElementById('testResult3');
+            try {
+                // 测试错误创建
+                const error1 = ErrorHandler.createError('测试错误', 'error', { test: true });
+                
+                // 测试错误处理
+                const testError = new Error('原生主机连接失败');
+                const handledError = ErrorHandler.handleError(testError, '测试上下文');
+                
+                result.className = 'test-result success';
+                result.textContent = `✅ 错误处理器测试通过
+- 错误创建: ${error1.message}
+- 错误类型: ${error1.type}
+- 处理后错误: ${handledError.message.substring(0, 50)}...`;
+            } catch (error) {
+                result.className = 'test-result error';
+                result.textContent = `❌ 错误处理器测试失败: ${error.message}`;
+            }
+        }
+
+        function testAppState() {
+            const result = document.getElementById('testResult4');
+            try {
+                // 测试状态设置
+                AppState.setState({ testData: 'hello', count: 1 });
+                
+                // 测试状态获取
+                const state = AppState.getState();
+                const testData = AppState.getState('testData');
+                
+                // 测试状态更新
+                AppState.setState({ count: 2 });
+                const updatedCount = AppState.getState('count');
+                
+                result.className = 'test-result success';
+                result.textContent = `✅ 应用状态管理测试通过
+- 初始状态: ${JSON.stringify(state, null, 2)}
+- 测试数据: ${testData}
+- 更新后计数: ${updatedCount}`;
+            } catch (error) {
+                result.className = 'test-result error';
+                result.textContent = `❌ 应用状态管理测试失败: ${error.message}`;
+            }
+        }
+
+        function testDebugFunctions() {
+            const result = document.getElementById('testResult5');
+            try {
+                // 测试调试函数是否可用
+                const functions = [
+                    'testAccountActions',
+                    'debugCookieStatus',
+                    'AppState',
+                    'AccountManager',
+                    'UIManager'
+                ];
+                
+                const available = functions.map(fn => ({
+                    name: fn,
+                    available: typeof window[fn] !== 'undefined'
+                }));
+                
+                result.className = 'test-result success';
+                result.textContent = `✅ 调试功能测试完成
+${available.map(f => `- ${f.name}: ${f.available ? '✅ 可用' : '❌ 不可用'}`).join('\n')}
+
+可以在控制台中使用以下命令:
+- window.testAccountActions()
+- window.debugCookieStatus()
+- window.AppState.getState()`;
+            } catch (error) {
+                result.className = 'test-result error';
+                result.textContent = `❌ 调试功能测试失败: ${error.message}`;
+            }
+        }
+
+        // 页面加载完成后自动运行基础测试
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🧪 开始自动测试...');
+            setTimeout(testDOMManager, 500);
+        });
+    </script>
+</body>
+</html>

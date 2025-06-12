@@ -1,244 +1,298 @@
+// =============================================================================
+// Cursor Client2Login - 模块化重构版本
+// =============================================================================
+
 // 调试信息
 console.log('🔍 插件调试信息:');
 console.log('扩展ID:', chrome.runtime.id);
 console.log('Chrome版本:', navigator.userAgent);
 
-// DOM元素引用 - 将在DOMContentLoaded后初始化
-let messageArea, emailInput, useridInput, accessTokenInput, accessTokenFile;
-let importDataBtn, autoReadBtn, processFilesBtn, accountList, refreshAccountsBtn;
-let openDashboardBtn, clearDataBtn, jsonDropZone, jsonFileInput, nativeHostInfo, showInstallGuide, currentStatus;
-
-// 文件数据存储
-let uploadedJsonData = null;
-
-// 测试原生消息传递函数
-function testNativeMessaging() {
-  const NATIVE_HOST_NAME = 'com.cursor.client.manage';
-  
-  console.log('🧪 测试原生消息传递...');
-  console.log('扩展ID:', chrome.runtime.id);
-  console.log('原生主机名称:', NATIVE_HOST_NAME);
-  
-      chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, { action: 'getClientCurrentData' }, (response) => {
-    const lastError = chrome.runtime.lastError;
-    
-    if (lastError) {
-      console.error('❌ 原生消息错误:', lastError.message || '未知错误');
-      console.error('错误对象:', lastError);
-      console.error('原生主机名:', NATIVE_HOST_NAME);
-      console.error('扩展ID:', chrome.runtime.id);
-      
-      // 显示详细错误信息到页面
-      const errorInfo = `
-🔍 原生消息连接诊断:
-• 错误: ${lastError.message || '未知错误'}
-• 原生主机: ${NATIVE_HOST_NAME}
-• 扩展ID: ${chrome.runtime.id}
-• 配置模式: 通配符 (chrome-extension://*)
-
-📋 可能的解决方案:
-1. 确保已安装原生主机: python3 install_native_host.py
-2. 重启Chrome浏览器
-3. 尝试具体扩展ID: python3 update_native_host.py ${chrome.runtime.id}
-      `;
-      
-      showMessage(errorInfo, 'error');
-    } else {
-      console.log('✅ 原生消息成功:', response);
-      showMessage('✅ 原生消息传递测试成功！', 'success');
+// =============================================================================
+// 错误处理模块
+// =============================================================================
+class ErrorHandler {
+    static createError(message, type = 'error', details = null) {
+        return {
+            message,
+            type,
+            details,
+            timestamp: new Date().toISOString()
+        };
     }
-  });
-}
 
-// 暴露到全局作用域用于调试
-window.testNativeMessaging = testNativeMessaging;
-window.getExtensionId = () => chrome.runtime.id;
+    static handleError(error, context = '') {
+        console.error(`❌ [${context}] 错误:`, error);
 
-// 初始化DOM元素引用
-function initializeDOMElements() {
-    messageArea = document.getElementById('messageArea');
-    emailInput = document.getElementById('emailInput');
-    useridInput = document.getElementById('useridInput');
-    accessTokenInput = document.getElementById('accessTokenInput');
-    accessTokenFile = document.getElementById('accessTokenFile');
-    importDataBtn = document.getElementById('importDataBtn');
-    autoReadBtn = document.getElementById('autoReadBtn');
-    processFilesBtn = document.getElementById('processFilesBtn');
-    accountList = document.getElementById('accountList');
-    refreshAccountsBtn = document.getElementById('refreshAccountsBtn');
-    openDashboardBtn = document.getElementById('openDashboardBtn');
-    clearDataBtn = document.getElementById('clearDataBtn');
-    jsonDropZone = document.getElementById('jsonDropZone');
-    jsonFileInput = document.getElementById('jsonFileInput');
-    nativeHostInfo = document.getElementById('nativeHostInfo');
-    showInstallGuide = document.getElementById('showInstallGuide');
-    currentStatus = document.getElementById('currentStatus');
-}
+        let errorMessage = error.message || '未知错误';
+        let errorType = 'error';
 
-// 初始化
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 页面加载完成，开始初始化...');
-    
-    // 首先初始化DOM元素
-    initializeDOMElements();
-    
-    // 然后执行其他初始化
-    await updateCurrentStatus();
-    await loadAccountList();
-    setupEventListeners();
-    setupMethodTabs();
-    setupFileUpload();
-    
-    // 自动测试原生消息传递
-    console.log('开始自动测试原生消息传递...');
-    setTimeout(testNativeMessaging, 1000);
-});
-
-// 设置方法切换标签
-function setupMethodTabs() {
-    const tabs = document.querySelectorAll('.method-tab');
-    const contents = document.querySelectorAll('.method-content');
-    
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const method = tab.dataset.method;
-            
-            // 切换标签激活状态
-            tabs.forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            
-            // 切换内容显示
-            contents.forEach(content => {
-                content.classList.remove('active');
-                if (content.id === `${method}Method`) {
-                    content.classList.add('active');
-                }
-            });
-        });
-    });
-}
-
-// 设置文件上传功能
-function setupFileUpload() {
-    // 点击上传
-    jsonDropZone.addEventListener('click', () => {
-        jsonFileInput.click();
-    });
-    
-    // 文件选择
-    jsonFileInput.addEventListener('change', handleFileSelect);
-    
-    // 拖拽上传
-    jsonDropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        jsonDropZone.classList.add('dragover');
-    });
-    
-    jsonDropZone.addEventListener('dragleave', () => {
-        jsonDropZone.classList.remove('dragover');
-    });
-    
-    jsonDropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        jsonDropZone.classList.remove('dragover');
-        
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            handleFileSelect({ target: { files } });
+        // 根据错误类型提供更好的用户提示
+        if (error.message?.includes('原生主机')) {
+            errorType = 'warning';
+            errorMessage += '\n\n💡 建议：\n1. 确保已安装原生主机程序\n2. 重启Chrome浏览器\n3. 检查安装步骤是否正确';
+        } else if (error.message?.includes('Cookie')) {
+            errorType = 'warning';
+            errorMessage += '\n\n💡 建议：\n1. 检查cursor.com的访问权限\n2. 尝试手动访问cursor.com\n3. 清除浏览器缓存后重试';
+        } else if (error.message?.includes('文件')) {
+            errorType = 'warning';
+            errorMessage += '\n\n💡 建议：\n1. 确保文件格式正确\n2. 检查文件是否损坏\n3. 尝试重新导出文件';
         }
-    });
-}
 
-// 处理文件选择
-async function handleFileSelect(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
-        showMessage('请选择JSON文件', 'error');
-        return;
+        return this.createError(errorMessage, errorType, error);
     }
-    
-    try {
-        const content = await readFile(file);
-        const result = await sendMessage('parseFileContent', { content, fileType: 'json' });
-        
-        if (result.success) {
-            uploadedJsonData = result.data;
-            jsonDropZone.innerHTML = `
-                <p>✅ 文件已上传: ${file.name}</p>
-                <p>Email: ${result.data.email}</p>
-                <p>User ID: ${result.data.userid}</p>
-            `;
-            showMessage('JSON文件解析成功', 'success');
-        } else {
-            throw new Error(result.error);
+
+    static async handleAsyncError(asyncFn, context = '') {
+        try {
+            return await asyncFn();
+        } catch (error) {
+            const handledError = this.handleError(error, context);
+            UIManager.showMessage(handledError.message, handledError.type);
+            throw handledError;
         }
-    } catch (error) {
-        showMessage(`文件处理失败: ${error.message}`, 'error');
     }
 }
 
-// 读取文件内容
-function readFile(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = (e) => reject(new Error('文件读取失败'));
-        reader.readAsText(file);
-    });
-}
+// =============================================================================
+// 加载状态管理模块
+// =============================================================================
+class LoadingManager {
+    static activeLoaders = new Set();
 
-// 设置事件监听器
-function setupEventListeners() {
-    console.log('🔧 开始设置事件监听器...');
-    
-    // 基本按钮事件
-    if (importDataBtn) importDataBtn.addEventListener('click', handleImportData);
-    if (autoReadBtn) autoReadBtn.addEventListener('click', handleAutoRead);
-    if (processFilesBtn) processFilesBtn.addEventListener('click', handleProcessFiles);
-    if (refreshAccountsBtn) refreshAccountsBtn.addEventListener('click', loadAccountList);
-    if (openDashboardBtn) openDashboardBtn.addEventListener('click', handleOpenDashboard);
-    if (clearDataBtn) clearDataBtn.addEventListener('click', handleClearData);
-    if (showInstallGuide) showInstallGuide.addEventListener('click', handleShowInstallGuide);
-    
+    static show(elementId, loadingText = '加载中...') {
+        const element = document.getElementById(elementId);
+        if (!element) return;
 
-    
-    // 为账户列表设置事件代理，处理动态生成的按钮
-    if (accountList) {
-        accountList.addEventListener('click', handleAccountListClick);
-        console.log('✅ 账户列表事件监听器已设置');
-    } else {
-        console.error('❌ accountList DOM元素未找到，无法设置事件监听器');
-    }
-    
-    console.log('✅ 事件监听器设置完成');
-}
-
-// 更新当前账户状态显示
-async function updateCurrentStatus() {
-    if (!currentStatus) {
-        console.error('❌ currentStatus DOM元素未找到');
-        return;
-    }
-    
-    try {
-        console.log('🔍 更新当前状态 - 验证账户一致性...');
-        
-        // 验证当前账户状态（对比storage和cookie）
-        const validationResult = await sendMessage('validateCurrentAccountStatus');
-        
-        if (!validationResult.success) {
-            throw new Error(validationResult.error);
+        // 保存原始状态
+        if (!element.dataset.originalText) {
+            element.dataset.originalText = element.textContent;
+            element.dataset.originalDisabled = element.disabled;
         }
-        
-        const status = validationResult.status;
-        const storageAccount = status.storageAccount;
-        const cookieStatus = status.cookieStatus;
-        
-        console.log('📊 账户状态验证结果:', status);
-        
-        if (status.isConsistent && storageAccount) {
+
+        element.textContent = loadingText;
+        element.disabled = true;
+        element.classList.add('loading');
+        this.activeLoaders.add(elementId);
+
+        // 添加加载动画类
+        if (!document.getElementById('loading-styles')) {
+            this.addLoadingStyles();
+        }
+    }
+
+    static hide(elementId) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+
+        // 恢复原始状态
+        if (element.dataset.originalText) {
+            element.textContent = element.dataset.originalText;
+            element.disabled = element.dataset.originalDisabled === 'true';
+            delete element.dataset.originalText;
+            delete element.dataset.originalDisabled;
+        }
+
+        element.classList.remove('loading');
+        this.activeLoaders.delete(elementId);
+    }
+
+    static addLoadingStyles() {
+        const style = document.createElement('style');
+        style.id = 'loading-styles';
+        style.textContent = `
+            .loading {
+                position: relative;
+                pointer-events: none;
+            }
+
+            .loading::after {
+                content: '';
+                position: absolute;
+                right: 10px;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 16px;
+                height: 16px;
+                border: 2px solid transparent;
+                border-top: 2px solid currentColor;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+
+            @keyframes spin {
+                0% { transform: translateY(-50%) rotate(0deg); }
+                100% { transform: translateY(-50%) rotate(360deg); }
+            }
+
+            .message.loading {
+                background: linear-gradient(90deg, rgba(33, 150, 243, 0.3) 0%, rgba(33, 150, 243, 0.1) 50%, rgba(33, 150, 243, 0.3) 100%);
+                background-size: 200% 100%;
+                animation: shimmer 1.5s infinite;
+            }
+
+            @keyframes shimmer {
+                0% { background-position: -200% 0; }
+                100% { background-position: 200% 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    static hideAll() {
+        this.activeLoaders.forEach(elementId => this.hide(elementId));
+    }
+}
+
+// =============================================================================
+// DOM管理模块
+// =============================================================================
+class DOMManager {
+    static elements = {};
+
+    static initialize() {
+        this.elements = {
+            messageArea: document.getElementById('messageArea'),
+            emailInput: document.getElementById('emailInput'),
+            useridInput: document.getElementById('useridInput'),
+            accessTokenInput: document.getElementById('accessTokenInput'),
+            accessTokenFile: document.getElementById('accessTokenFile'),
+            importDataBtn: document.getElementById('importDataBtn'),
+            autoReadBtn: document.getElementById('autoReadBtn'),
+            processFilesBtn: document.getElementById('processFilesBtn'),
+            accountList: document.getElementById('accountList'),
+            refreshAccountsBtn: document.getElementById('refreshAccountsBtn'),
+            openDashboardBtn: document.getElementById('openDashboardBtn'),
+            clearDataBtn: document.getElementById('clearDataBtn'),
+            jsonDropZone: document.getElementById('jsonDropZone'),
+            jsonFileInput: document.getElementById('jsonFileInput'),
+            nativeHostInfo: document.getElementById('nativeHostInfo'),
+            showInstallGuide: document.getElementById('showInstallGuide'),
+            currentStatus: document.getElementById('currentStatus')
+        };
+
+        // 验证关键元素是否存在
+        const missingElements = Object.entries(this.elements)
+            .filter(([, element]) => !element)
+            .map(([key]) => key);
+
+        if (missingElements.length > 0) {
+            console.warn('⚠️ 以下DOM元素未找到:', missingElements);
+            // 在测试环境中，这是正常的，不需要报错
+        }
+
+        return this.elements;
+    }
+
+    static get(elementId) {
+        return this.elements[elementId] || document.getElementById(elementId);
+    }
+
+    static getAll() {
+        return this.elements;
+    }
+}
+
+// =============================================================================
+// 应用状态管理
+// =============================================================================
+class AppState {
+    static state = {
+        uploadedJsonData: null,
+        currentAccount: null,
+        accountList: [],
+        isInitialized: false
+    };
+
+    static setState(updates) {
+        this.state = { ...this.state, ...updates };
+        console.log('📊 状态更新:', updates);
+    }
+
+    static getState(key = null) {
+        return key ? this.state[key] : this.state;
+    }
+
+    static clearUploadedData() {
+        this.setState({ uploadedJsonData: null });
+    }
+}
+
+// =============================================================================
+// UI管理模块
+// =============================================================================
+class UIManager {
+    static showMessage(message, type = 'info', duration = null) {
+        console.log(`📝 显示消息 [${type}]:`, message);
+
+        const messageArea = DOMManager.get('messageArea');
+        if (!messageArea) {
+            console.error('❌ messageArea DOM元素未找到');
+            return;
+        }
+
+        try {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = message;
+            messageDiv.style.whiteSpace = 'pre-line';
+
+            // 添加加载状态样式
+            if (type === 'loading') {
+                messageDiv.classList.add('loading');
+            }
+
+            messageArea.innerHTML = '';
+            messageArea.appendChild(messageDiv);
+
+            // 根据消息类型调整自动清除时间
+            const clearTime = duration || (type === 'error' ? 8000 : type === 'loading' ? 0 : 3000);
+
+            if (clearTime > 0) {
+                setTimeout(() => {
+                    if (messageDiv && messageDiv.parentNode) {
+                        messageDiv.remove();
+                    }
+                }, clearTime);
+            }
+
+            console.log('✅ 消息已显示到页面');
+        } catch (error) {
+            console.error('❌ 显示消息时发生错误:', error);
+        }
+    }
+
+    static clearMessage() {
+        const messageArea = DOMManager.get('messageArea');
+        if (messageArea) {
+            messageArea.innerHTML = '';
+        }
+    }
+
+    static updateCurrentStatus(statusData) {
+        const currentStatus = DOMManager.get('currentStatus');
+        if (!currentStatus) {
+            console.warn('⚠️ currentStatus DOM元素未找到，可能在测试环境中');
+            return;
+        }
+
+        // 安全的解构赋值，提供默认值
+        if (!statusData || typeof statusData !== 'object') {
+            console.warn('⚠️ statusData无效，使用默认状态');
+            statusData = {
+                isConsistent: false,
+                storageAccount: null,
+                cookieStatus: { hasCookie: false },
+                recommendation: '状态数据无效'
+            };
+        }
+
+        const {
+            isConsistent = false,
+            storageAccount = null,
+            cookieStatus = { hasCookie: false },
+            recommendation = '未知状态'
+        } = statusData;
+
+        if (isConsistent && storageAccount) {
             // 账户状态一致且正常
             currentStatus.className = 'current-status';
             currentStatus.innerHTML = `
@@ -250,71 +304,10 @@ async function updateCurrentStatus() {
             `;
         } else if (cookieStatus.hasCookie && cookieStatus.cookieData && !cookieStatus.cookieData.isExpired) {
             // Cookie存在且有效，但与storage不一致
-            const cookieData = cookieStatus.cookieData;
-            
-            // 尝试从账户列表中找到匹配的账户信息
-            const accountListResult = await chrome.storage.local.get(['accountList']);
-            const accounts = accountListResult.accountList || [];
-            const matchingAccount = accounts.find(acc => acc.userid === cookieData.userid);
-            
-            if (matchingAccount) {
-                currentStatus.className = 'current-status warning';
-                currentStatus.innerHTML = `
-                    <span class="status-icon">⚠️</span>
-                    <div class="status-title">当前账户</div>
-                    <div class="status-email">${matchingAccount.email}</div>
-                    <div class="status-userid">${cookieData.userid}</div>
-                    <div class="status-note">基于Cookie识别</div>
-                `;
-            } else {
-                currentStatus.className = 'current-status warning';
-                currentStatus.innerHTML = `
-                    <span class="status-icon">⚠️</span>
-                    <div class="status-title">当前账户</div>
-                    <div class="status-email">未知账户</div>
-                    <div class="status-userid">${cookieData.userid}</div>
-                    <div class="status-note">Cookie中有认证信息</div>
-                `;
-            }
+            this.updateStatusWithCookie(currentStatus, cookieStatus.cookieData);
         } else if (storageAccount) {
             // storage中有账户但Cookie无效
-            let statusNote = '请重新切换';
-            let statusIcon = '🔄';
-            let showRestoreButton = false;
-            
-            if (cookieStatus.hasCookie && cookieStatus.cookieData?.isExpired) {
-                statusNote = 'Cookie已过期';
-                statusIcon = '⏰';
-                showRestoreButton = true;
-            } else if (!cookieStatus.hasCookie) {
-                statusNote = 'Cookie已清除';
-                statusIcon = '🍪';
-                showRestoreButton = true;
-            }
-            
-            currentStatus.className = 'current-status warning';
-            currentStatus.innerHTML = `
-                <span class="status-icon">${statusIcon}</span>
-                <div class="status-title">当前账户</div>
-                <div class="status-email">${storageAccount.email}</div>
-                <div class="status-userid">${storageAccount.userid}</div>
-                <div class="status-note">${statusNote}</div>
-                ${showRestoreButton ? `
-                    <button id="restoreCookieBtn" class="btn-warning" style="margin-top: 8px; padding: 6px 12px; font-size: 11px; width: auto;">
-                        🔧 重新设置Cookie
-                    </button>
-                ` : ''}
-            `;
-            
-            // 如果显示了恢复按钮，添加事件监听器
-            if (showRestoreButton) {
-                setTimeout(() => {
-                    const restoreBtn = document.getElementById('restoreCookieBtn');
-                    if (restoreBtn) {
-                        restoreBtn.addEventListener('click', () => handleRestoreCookie(storageAccount));
-                    }
-                }, 100);
-            }
+            this.updateStatusWithStorageAccount(currentStatus, storageAccount, cookieStatus);
         } else {
             // 完全没有账户信息
             currentStatus.className = 'current-status no-account';
@@ -323,335 +316,98 @@ async function updateCurrentStatus() {
                 <div class="status-title">当前账户</div>
                 <div class="status-email">未登录</div>
                 <div class="status-userid">请先导入账户</div>
-                <div class="status-note">${status.recommendation}</div>
+                <div class="status-note">${recommendation}</div>
             `;
         }
-        
-        // 在控制台显示建议
-        if (status.recommendation && status.recommendation !== '当前账户状态正常') {
-            console.log('💡 建议:', status.recommendation);
+    }
+
+    static async updateStatusWithCookie(currentStatus, cookieData) {
+        // 尝试从账户列表中找到匹配的账户信息
+        const accountListResult = await chrome.storage.local.get(['accountList']);
+        const accounts = accountListResult.accountList || [];
+        const matchingAccount = accounts.find(acc => acc.userid === cookieData.userid);
+
+        if (matchingAccount) {
+            currentStatus.className = 'current-status warning';
+            currentStatus.innerHTML = `
+                <span class="status-icon">⚠️</span>
+                <div class="status-title">当前账户</div>
+                <div class="status-email">${matchingAccount.email}</div>
+                <div class="status-userid">${cookieData.userid}</div>
+                <div class="status-note">基于Cookie识别</div>
+            `;
+        } else {
+            currentStatus.className = 'current-status warning';
+            currentStatus.innerHTML = `
+                <span class="status-icon">⚠️</span>
+                <div class="status-title">当前账户</div>
+                <div class="status-email">未知账户</div>
+                <div class="status-userid">${cookieData.userid}</div>
+                <div class="status-note">Cookie中有认证信息</div>
+            `;
         }
-        
-    } catch (error) {
-        console.error('❌ 更新当前状态时发生错误:', error);
-        currentStatus.className = 'current-status no-account';
+    }
+
+    static updateStatusWithStorageAccount(currentStatus, storageAccount, cookieStatus) {
+        let statusNote = '请重新切换';
+        let statusIcon = '🔄';
+        let showRestoreButton = false;
+
+        if (cookieStatus.hasCookie && cookieStatus.cookieData?.isExpired) {
+            statusNote = 'Cookie已过期';
+            statusIcon = '⏰';
+            showRestoreButton = true;
+        } else if (!cookieStatus.hasCookie) {
+            statusNote = 'Cookie已清除';
+            statusIcon = '🍪';
+            showRestoreButton = true;
+        }
+
+        currentStatus.className = 'current-status warning';
         currentStatus.innerHTML = `
-            <span class="status-icon">❌</span>
-            <div class="status-title">状态错误</div>
-            <div class="status-email">加载失败</div>
-            <div class="status-userid">请重试</div>
-            <div class="status-note">${error.message}</div>
+            <span class="status-icon">${statusIcon}</span>
+            <div class="status-title">当前账户</div>
+            <div class="status-email">${storageAccount.email}</div>
+            <div class="status-userid">${storageAccount.userid}</div>
+            <div class="status-note">${statusNote}</div>
+            ${showRestoreButton ? `
+                <button id="restoreCookieBtn" class="btn-warning" style="margin-top: 8px; padding: 6px 12px; font-size: 11px; width: auto;">
+                    🔧 重新设置Cookie
+                </button>
+            ` : ''}
         `;
-    }
-}
 
-// 处理账户列表中的点击事件
-function handleAccountListClick(event) {
-    console.log('🖱️ 账户列表点击事件:', event.target);
-    
-    const target = event.target;
-    if (!target.classList.contains('btn-small')) {
-        console.log('❌ 点击的不是按钮，忽略');
-        return;
-    }
-    
-    const action = target.getAttribute('data-action');
-    const index = target.getAttribute('data-index');
-    
-    console.log('🎯 按钮操作:', action, '索引:', index);
-    
-    if (!action || index === null) {
-        console.error('❌ 按钮缺少必要的data属性');
-        return;
-    }
-    
-    const accountIndex = parseInt(index);
-    if (isNaN(accountIndex)) {
-        console.error('❌ 无效的账户索引:', index);
-        return;
-    }
-    
-    try {
-        if (action === 'switch') {
-            console.log('🔄 执行切换账户，索引:', accountIndex);
-            switchToAccount(accountIndex);
-        } else if (action === 'delete') {
-            console.log('🗑️ 执行删除账户，索引:', accountIndex);
-            deleteAccount(accountIndex);
-        } else {
-            console.error('❌ 未知的操作类型:', action);
-        }
-    } catch (error) {
-        console.error('❌ 执行按钮点击事件时出错:', error);
-        console.error('错误堆栈:', error.stack);
-    }
-}
-
-// 处理自动读取
-async function handleAutoRead() {
-    autoReadBtn.disabled = true;
-    autoReadBtn.textContent = '🔍 正在读取...';
-    
-    try {
-        const result = await sendMessage('autoReadCursorData');
-        
-        if (result.success) {
-            showMessage('自动读取成功！', 'success');
-            
-            // 自动导入数据
-            const accountData = {
-                email: result.data.email,
-                userid: result.data.userid,
-                accessToken: result.data.accessToken,
-                WorkosCursorSessionToken: `${result.data.userid}%3A%3A${result.data.accessToken}`,
-                createTime: new Date().toISOString()
-            };
-            
-            await processAccountData(accountData);
-        } else {
-            if (result.needFileSelection) {
-                // 构建详细的错误信息
-                let errorMsg = result.error || '自动读取失败';
-                
-                // 如果有故障排除建议，显示它们
-                if (result.troubleshooting && result.troubleshooting.length > 0) {
-                    errorMsg += '\n\n📋 故障排除建议：\n' + 
-                               result.troubleshooting.map(item => `• ${item}`).join('\n');
-                } else if (result.details) {
-                    errorMsg += `\n\n🔍 详细信息: ${result.details}`;
+        // 如果显示了恢复按钮，添加事件监听器
+        if (showRestoreButton) {
+            setTimeout(() => {
+                const restoreBtn = document.getElementById('restoreCookieBtn');
+                if (restoreBtn) {
+                    restoreBtn.addEventListener('click', () => AccountManager.handleRestoreCookie(storageAccount));
                 }
-                
-                showMessage(errorMsg, 'error');
-                nativeHostInfo.classList.remove('hidden');
-            } else {
-                throw new Error(result.error);
-            }
+            }, 100);
         }
-    } catch (error) {
-        showMessage(`自动读取失败: ${error.message}`, 'error');
-        nativeHostInfo.classList.remove('hidden');
-    } finally {
-        autoReadBtn.disabled = false;
-        autoReadBtn.textContent = '🔍 自动读取Cursor数据';
     }
-}
 
-// 处理文件数据
-async function handleProcessFiles() {
-    if (!uploadedJsonData) {
-        showMessage('请先上传scope_v3.json文件', 'error');
-        return;
-    }
-    
-    const accessToken = accessTokenFile.value.trim();
-    if (!accessToken) {
-        showMessage('请输入Access Token', 'error');
-        return;
-    }
-    
-    processFilesBtn.disabled = true;
-    processFilesBtn.textContent = '📋 处理中...';
-    
-    try {
-        const accountData = {
-            email: uploadedJsonData.email,
-            userid: uploadedJsonData.userid,
-            accessToken: accessToken,
-            WorkosCursorSessionToken: `${uploadedJsonData.userid}%3A%3A${accessToken}`,
-            createTime: new Date().toISOString()
-        };
-        
-        await processAccountData(accountData);
-        
-        // 清空文件输入
-        accessTokenFile.value = '';
-        uploadedJsonData = null;
-        jsonDropZone.innerHTML = `
-            <p>📄 拖拽 scope_v3.json 文件到这里<br>或点击选择文件</p>
-        `;
-        
-    } catch (error) {
-        showMessage(`处理失败: ${error.message}`, 'error');
-    } finally {
-        processFilesBtn.disabled = false;
-        processFilesBtn.textContent = '📋 处理文件数据';
-    }
-}
-
-// 处理账户数据（通用方法）
-async function processAccountData(accountData) {
-    // 保存到localStorage
-    const saveResult = await sendMessage('saveToLocalStorage', accountData);
-    if (!saveResult.success) {
-        throw new Error(saveResult.error);
-    }
-    
-    // 设置Cookie
-    const cookieResult = await sendMessage('setCookie', { 
-        userid: accountData.userid, 
-        accessToken: accountData.accessToken 
-    });
-    if (!cookieResult.success) {
-        throw new Error(cookieResult.error);
-    }
-    
-    showMessage('认证数据导入成功！', 'success');
-    
-    // 刷新账户列表和状态
-    await updateCurrentStatus();
-    await loadAccountList();
-    
-    // 自动打开Dashboard
-    setTimeout(async () => {
-        await handleOpenDashboard();
-    }, 1000);
-}
-
-// 显示消息
-function showMessage(message, type = 'info') {
-    console.log(`📝 显示消息 [${type}]:`, message);
-    
-    // 检查messageArea是否存在
-    if (!messageArea) {
-        console.error('❌ messageArea DOM元素未找到，尝试重新获取...');
-        const tempMessageArea = document.getElementById('messageArea');
-        if (tempMessageArea) {
-            // 如果找到了，更新全局变量
-            messageArea = tempMessageArea;
-            console.log('✅ messageArea已重新获取');
-        } else {
-            console.error('❌ 无法找到messageArea元素，消息将只在控制台显示');
+    static displayAccountList(accounts, currentAccount) {
+        const accountList = DOMManager.get('accountList');
+        if (!accountList) {
+            console.warn('⚠️ accountList DOM元素未找到，可能在测试环境中');
             return;
         }
-    }
-    
-    try {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${type}`;
-        messageDiv.textContent = message;
-        messageDiv.style.whiteSpace = 'pre-line'; // 支持换行显示
-        
-        messageArea.innerHTML = '';
-        messageArea.appendChild(messageDiv);
-        
-        // 根据消息类型调整自动清除时间
-        const clearTime = type === 'error' ? 8000 : 3000; // 错误消息显示更长时间
-        setTimeout(() => {
-            if (messageDiv && messageDiv.parentNode) {
-                messageDiv.remove();
-            }
-        }, clearTime);
-        
-        console.log('✅ 消息已显示到页面');
-    } catch (error) {
-        console.error('❌ 显示消息时发生错误:', error);
-        console.error('错误堆栈:', error.stack);
-    }
-}
 
-// 处理手动导入数据
-async function handleImportData() {
-    const email = emailInput.value.trim();
-    const userid = useridInput.value.trim();
-    const accessToken = accessTokenInput.value.trim();
-    
-    if (!email || !userid || !accessToken) {
-        showMessage('请填写所有必需字段', 'error');
-        return;
-    }
-    
-    // 验证email格式
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-        showMessage('请输入有效的email地址', 'error');
-        return;
-    }
-    
-    importDataBtn.disabled = true;
-    importDataBtn.textContent = '处理中...';
-    
-    try {
-        const accountData = {
-            email: email,
-            userid: userid,
-            accessToken: accessToken,
-            WorkosCursorSessionToken: `${userid}%3A%3A${accessToken}`,
-            createTime: new Date().toISOString()
-        };
-        
-        await processAccountData(accountData);
-        
-        // 清空输入框
-        emailInput.value = '';
-        useridInput.value = '';
-        accessTokenInput.value = '';
-        
-    } catch (error) {
-        showMessage(`导入失败: ${error.message}`, 'error');
-    } finally {
-        importDataBtn.disabled = false;
-        importDataBtn.textContent = '💾 导入并设置认证';
-    }
-}
-
-// 加载账户列表
-async function loadAccountList() {
-    console.log('📋 开始加载账户列表...');
-    
-    try {
-        const result = await chrome.storage.local.get(['accountList']);
-        const accounts = result.accountList || [];
-        
-        console.log('📋 获取到账户列表:', accounts);
-        console.log('账户数量:', accounts.length);
-        
-        await displayAccountList(accounts);
-        console.log('✅ 账户列表显示完成');
-    } catch (error) {
-        console.error('❌ 加载账户列表失败:', error);
-        console.error('错误堆栈:', error.stack);
-        
-        if (accountList) {
-            accountList.innerHTML = '<div class="loading">加载失败</div>';
-        } else {
-            console.error('❌ accountList DOM元素未找到');
-        }
-    }
-}
-
-// 显示账户列表
-async function displayAccountList(accounts) {
-    console.log('🎨 开始显示账户列表，账户数量:', accounts.length);
-    
-    if (!accountList) {
-        console.error('❌ accountList DOM元素未找到');
-        return;
-    }
-    
-    try {
         if (accounts.length === 0) {
             accountList.innerHTML = '<div class="loading">暂无保存的账户</div>';
-            console.log('📝 显示空账户列表提示');
             return;
         }
-        
-        // 获取当前激活的账户
-        const result = await chrome.storage.local.get(['currentAccount']);
-        const currentAccount = result.currentAccount;
-        
+
         const accountsHtml = accounts.map((account, index) => {
-            // 确保account对象包含必要的字段
             const email = account.email || '未知邮箱';
             const userid = account.userid || '未知用户ID';
-            
-            // 检查是否为当前激活账户
-            const isCurrentAccount = currentAccount && 
-                                   currentAccount.email === account.email && 
+
+            const isCurrentAccount = currentAccount &&
+                                   currentAccount.email === account.email &&
                                    currentAccount.userid === account.userid;
-            
-            console.log(`🏷️ 生成账户项 ${index}:`, email, isCurrentAccount ? '(当前账户)' : '');
-            
-            // 根据是否为当前账户显示不同的按钮
+
             let actionButtons = '';
             if (isCurrentAccount) {
                 actionButtons = `
@@ -664,7 +420,7 @@ async function displayAccountList(accounts) {
                     <button class="btn-small btn-danger" data-action="delete" data-index="${index}">删除</button>
                 `;
             }
-            
+
             return `
                 <div class="account-item ${isCurrentAccount ? 'current-account' : ''}">
                     <div class="account-info">
@@ -677,304 +433,771 @@ async function displayAccountList(accounts) {
                 </div>
             `;
         }).join('');
-        
+
         accountList.innerHTML = accountsHtml;
-        console.log('✅ 账户列表HTML已生成并插入DOM');
-    } catch (error) {
-        console.error('❌ 显示账户列表时发生错误:', error);
-        console.error('错误堆栈:', error.stack);
-        accountList.innerHTML = '<div class="loading error">显示账户列表失败</div>';
     }
 }
 
-// 切换到指定账户
-async function switchToAccount(index) {
-    try {
-        const result = await chrome.storage.local.get(['accountList']);
-        const accounts = result.accountList || [];
-        
-        if (index >= 0 && index < accounts.length) {
-            const account = accounts[index];
-            
-            // 设置Cookie
-            const cookieResult = await sendMessage('setCookie', {
-                userid: account.userid,
-                accessToken: account.accessToken
-            });
-            
-            if (cookieResult.success) {
-                showMessage(`已切换到账户: ${account.email}`, 'success');
-                
-                // 更新当前账户
-                await chrome.storage.local.set({ currentAccount: account });
-                
-                // 刷新账户列表和状态以更新UI
-                await updateCurrentStatus();
-                await loadAccountList();
-                
-                // 自动打开Dashboard
-                setTimeout(async () => {
-                    await handleOpenDashboard();
-                }, 1000);
-            } else {
-                throw new Error(cookieResult.error);
-            }
+// =============================================================================
+// 原生主机通信模块
+// =============================================================================
+class NativeHostManager {
+    static NATIVE_HOST_NAME = 'com.cursor.client.manage';
+
+    static async testConnection() {
+        console.log('🧪 测试原生消息传递...');
+        console.log('扩展ID:', chrome?.runtime?.id || 'test-extension-id');
+        console.log('原生主机名称:', this.NATIVE_HOST_NAME);
+
+        // 检查Chrome API是否可用
+        if (!chrome?.runtime?.sendNativeMessage) {
+            console.warn('⚠️ Chrome原生消息API不可用，可能在测试环境中');
+            UIManager.showMessage('⚠️ 测试环境：原生消息API不可用', 'warning');
+            return false;
         }
-    } catch (error) {
-        showMessage(`切换账户失败: ${error.message}`, 'error');
-    }
-}
 
-// 删除账户
-async function deleteAccount(index) {
-    console.log('🗑️ 删除账户请求，索引:', index);
-    
-    if (!confirm('确定要删除这个账户吗？')) {
-        console.log('用户取消删除操作');
-        return;
-    }
-    
-    try {
-        console.log('开始获取账户和当前账户数据...');
-        const result = await chrome.storage.local.get(['accountList', 'currentAccount']);
-        const accounts = result.accountList || [];
-        const currentAccount = result.currentAccount;
-        
-        console.log('当前账户列表:', accounts);
-        console.log('当前激活账户:', currentAccount);
-        console.log('要删除的索引:', index, '账户总数:', accounts.length);
-        
-        if (index >= 0 && index < accounts.length) {
-            const deletedAccount = accounts[index];
-            console.log('即将删除账户:', deletedAccount);
-            
-            // 检查是否删除的是当前使用的账户
-            const isCurrentAccount = currentAccount && 
-                                   currentAccount.email === deletedAccount.email && 
-                                   currentAccount.userid === deletedAccount.userid;
-            
-            console.log('是否为当前账户:', isCurrentAccount);
-            
-            if (isCurrentAccount) {
-                console.log('🧹 删除的是当前账户，开始清理相关数据...');
-                
-                // 清除当前账户数据
-                await chrome.storage.local.remove(['currentAccount']);
-                console.log('✅ currentAccount 已清除');
-                
-                // 清除Cookie
-                try {
-                    const clearCookieResult = await sendMessage('clearCookie');
-                    if (clearCookieResult && clearCookieResult.success) {
-                        console.log('✅ Cookie 已清除');
-                    } else {
-                        console.warn('⚠️ Cookie清除可能失败:', clearCookieResult?.error);
-                    }
-                } catch (cookieError) {
-                    console.error('❌ 清除Cookie时出错:', cookieError);
-                }
-                
-                showMessage(`已删除当前账户: ${deletedAccount.email}\n相关Cookie和数据已清理`, 'success');
-            } else {
-                showMessage(`已删除账户: ${deletedAccount.email}`, 'success');
-            }
-            
-            // 从列表中移除账户
-            accounts.splice(index, 1);
-            console.log('删除后的账户列表:', accounts);
-            
-            await chrome.storage.local.set({ accountList: accounts });
-            console.log('✅ 账户已从存储中删除');
-            
-            await updateCurrentStatus();
-            await loadAccountList();
-            console.log('✅ 账户列表已刷新');
-        } else {
-            console.error('❌ 索引超出范围:', index, '有效范围: 0-', accounts.length - 1);
-            showMessage('删除失败：索引无效', 'error');
-        }
-    } catch (error) {
-        console.error('❌ 删除账户时发生错误:', error);
-        console.error('错误堆栈:', error.stack);
-        showMessage(`删除账户失败: ${error.message}`, 'error');
-    }
-}
+        return new Promise((resolve) => {
+            chrome.runtime.sendNativeMessage(this.NATIVE_HOST_NAME, { action: 'getClientCurrentData' }, (response) => {
+                const lastError = chrome.runtime.lastError;
 
-// 处理打开Dashboard
-async function handleOpenDashboard() {
-    try {
-        const result = await sendMessage('openDashboard');
-        if (result.success) {
-            showMessage('Dashboard页面已打开', 'success');
-        } else {
-            throw new Error(result.error);
-        }
-    } catch (error) {
-        showMessage(`打开Dashboard失败: ${error.message}`, 'error');
-    }
-}
+                if (lastError) {
+                    console.error('❌ 原生消息错误:', lastError.message || '未知错误');
 
-// 处理清空数据
-async function handleClearData() {
-    if (!confirm('确定要清空所有保存的数据吗？此操作不可恢复！')) {
-        return;
-    }
-    
-    try {
-        await chrome.storage.local.clear();
-        showMessage('所有数据已清空', 'success');
-        await updateCurrentStatus();
-        await loadAccountList();
-    } catch (error) {
-        showMessage(`清空数据失败: ${error.message}`, 'error');
-    }
-}
+                    const errorInfo = `
+🔍 原生消息连接诊断:
+• 错误: ${lastError.message || '未知错误'}
+• 原生主机: ${this.NATIVE_HOST_NAME}
+• 扩展ID: ${chrome.runtime.id}
 
-// 处理显示安装指南
-function handleShowInstallGuide() {
-    showMessage('请参考插件文件夹中的 install-guide.md 文件获取详细安装说明', 'info');
-    // 可以考虑打开一个新标签页显示安装指南
-    chrome.tabs.create({
-        url: chrome.runtime.getURL('install-guide.md')
-    });
-}
+📋 可能的解决方案:
+1. 确保已安装原生主机: python3 install_native_host.py
+2. 重启Chrome浏览器
+3. 尝试具体扩展ID: python3 update_native_host.py ${chrome.runtime.id}
+                    `;
 
-// 发送消息到background script
-function sendMessage(action, data = null) {
-    return new Promise((resolve) => {
-        chrome.runtime.sendMessage({ action, data }, resolve);
-    });
-}
-
-// 处理恢复Cookie
-async function handleRestoreCookie(storageAccount) {
-    try {
-        console.log('🔧 开始恢复Cookie...', storageAccount);
-        
-        const restoreBtn = document.getElementById('restoreCookieBtn');
-        if (restoreBtn) {
-            restoreBtn.disabled = true;
-            restoreBtn.textContent = '🔄 设置中...';
-        }
-        
-        let accessToken = storageAccount.accessToken;
-        
-        // 如果storage中没有完整的accessToken，尝试从原生主机获取
-        if (!accessToken || accessToken.length < 100) {
-            console.log('💡 Storage中的token不完整，尝试从原生主机获取...');
-            
-            try {
-                const nativeResult = await sendMessage('autoReadCursorData');
-                if (nativeResult.success && nativeResult.data.accessToken) {
-                    accessToken = nativeResult.data.accessToken;
-                    console.log('✅ 从原生主机获取到accessToken');
-                    
-                    // 更新storage中的账户信息
-                    const updatedAccount = {
-                        ...storageAccount,
-                        accessToken: accessToken
-                    };
-                    await chrome.storage.local.set({ currentAccount: updatedAccount });
-                    
-                    // 同时更新账户列表中对应的账户
-                    const accountListResult = await chrome.storage.local.get(['accountList']);
-                    const accounts = accountListResult.accountList || [];
-                    const accountIndex = accounts.findIndex(acc => 
-                        acc.email === storageAccount.email && acc.userid === storageAccount.userid
-                    );
-                    
-                    if (accountIndex !== -1) {
-                        accounts[accountIndex].accessToken = accessToken;
-                        await chrome.storage.local.set({ accountList: accounts });
-                        console.log('✅ 已更新账户列表中的token');
-                    }
+                    UIManager.showMessage(errorInfo, 'error');
+                    resolve(false);
                 } else {
-                    throw new Error('无法从原生主机获取accessToken');
+                    console.log('✅ 原生消息成功:', response);
+                    UIManager.showMessage('✅ 原生消息传递测试成功！', 'success');
+                    resolve(true);
                 }
-            } catch (nativeError) {
-                console.warn('⚠️ 从原生主机获取token失败:', nativeError.message);
-                // 如果原生主机失败，仍然尝试使用storage中的token
-                if (!accessToken) {
-                    throw new Error('无法获取有效的accessToken，请重新导入账户');
-                }
+            });
+        });
+    }
+}
+
+// 暴露到全局作用域用于调试
+window.testNativeMessaging = () => NativeHostManager.testConnection();
+window.getExtensionId = () => chrome.runtime.id;
+
+// =============================================================================
+// 账户管理模块
+// =============================================================================
+class AccountManager {
+    static async loadAccountList() {
+        console.log('📋 开始加载账户列表...');
+
+        try {
+            // 检查Chrome API是否可用
+            if (!chrome?.storage?.local) {
+                console.warn('⚠️ Chrome storage API不可用，可能在测试环境中');
+                return;
+            }
+
+            const result = await chrome.storage.local.get(['accountList', 'currentAccount']);
+            const accounts = result?.accountList || [];
+            const currentAccount = result?.currentAccount;
+
+            console.log('📋 获取到账户列表:', accounts);
+            AppState.setState({ accountList: accounts, currentAccount });
+
+            UIManager.displayAccountList(accounts, currentAccount);
+            console.log('✅ 账户列表显示完成');
+        } catch (error) {
+            const handledError = ErrorHandler.handleError(error, '加载账户列表');
+            UIManager.showMessage(handledError.message, handledError.type);
+
+            const accountList = DOMManager.get('accountList');
+            if (accountList) {
+                accountList.innerHTML = '<div class="loading">加载失败</div>';
             }
         }
-        
+    }
+
+    static async switchToAccount(index) {
+        return ErrorHandler.handleAsyncError(async () => {
+            const { accountList } = AppState.getState();
+
+            if (index >= 0 && index < accountList.length) {
+                const account = accountList[index];
+
+                LoadingManager.show('accountList', '切换中...');
+
+                const cookieResult = await MessageManager.sendMessage('setCookie', {
+                    userid: account.userid,
+                    accessToken: account.accessToken
+                });
+
+                if (cookieResult.success) {
+                    UIManager.showMessage(`已切换到账户: ${account.email}`, 'success');
+
+                    await chrome.storage.local.set({ currentAccount: account });
+                    AppState.setState({ currentAccount: account });
+
+                    await this.updateCurrentStatus();
+                    await this.loadAccountList();
+
+                    setTimeout(async () => {
+                        await DashboardManager.openDashboard();
+                    }, 1000);
+                } else {
+                    throw new Error(cookieResult.error);
+                }
+            }
+        }, '切换账户').finally(() => {
+            LoadingManager.hide('accountList');
+        });
+    }
+
+    static async deleteAccount(index) {
+        console.log('🗑️ 删除账户请求，索引:', index);
+
+        if (!confirm('确定要删除这个账户吗？')) {
+            return;
+        }
+
+        return ErrorHandler.handleAsyncError(async () => {
+            const result = await chrome.storage.local.get(['accountList', 'currentAccount']);
+            const accounts = result.accountList || [];
+            const currentAccount = result.currentAccount;
+
+            if (index >= 0 && index < accounts.length) {
+                const deletedAccount = accounts[index];
+
+                const isCurrentAccount = currentAccount &&
+                                       currentAccount.email === deletedAccount.email &&
+                                       currentAccount.userid === deletedAccount.userid;
+
+                if (isCurrentAccount) {
+                    await chrome.storage.local.remove(['currentAccount']);
+
+                    try {
+                        const clearCookieResult = await MessageManager.sendMessage('clearCookie');
+                        if (clearCookieResult && clearCookieResult.success) {
+                            console.log('✅ Cookie 已清除');
+                        }
+                    } catch (cookieError) {
+                        console.error('❌ 清除Cookie时出错:', cookieError);
+                    }
+
+                    UIManager.showMessage(`已删除当前账户: ${deletedAccount.email}\n相关Cookie和数据已清理`, 'success');
+                } else {
+                    UIManager.showMessage(`已删除账户: ${deletedAccount.email}`, 'success');
+                }
+
+                accounts.splice(index, 1);
+                await chrome.storage.local.set({ accountList: accounts });
+
+                AppState.setState({
+                    accountList: accounts,
+                    currentAccount: isCurrentAccount ? null : currentAccount
+                });
+
+                await this.updateCurrentStatus();
+                await this.loadAccountList();
+            }
+        }, '删除账户');
+    }
+
+    static async updateCurrentStatus() {
+        const currentStatus = DOMManager.get('currentStatus');
+        if (!currentStatus) {
+            console.warn('⚠️ currentStatus DOM元素未找到，可能在测试环境中');
+            return;
+        }
+
+        try {
+            console.log('🔍 更新当前状态 - 验证账户一致性...');
+
+            // 检查是否在测试环境中
+            if (!chrome?.runtime?.sendMessage) {
+                console.log('⚠️ 测试环境：使用模拟状态数据');
+                const mockStatus = {
+                    isConsistent: false,
+                    storageAccount: null,
+                    cookieStatus: { hasCookie: false },
+                    recommendation: '测试环境：无法验证真实状态'
+                };
+                UIManager.updateCurrentStatus(mockStatus);
+                return;
+            }
+
+            const validationResult = await MessageManager.sendMessage('validateCurrentAccountStatus');
+
+            if (!validationResult || !validationResult.success) {
+                console.warn('⚠️ 账户状态验证失败，使用默认状态');
+                const defaultStatus = {
+                    isConsistent: false,
+                    storageAccount: null,
+                    cookieStatus: { hasCookie: false },
+                    recommendation: validationResult?.error || '无法获取账户状态'
+                };
+                UIManager.updateCurrentStatus(defaultStatus);
+                return;
+            }
+
+            const status = validationResult.status;
+            console.log('📊 账户状态验证结果:', status);
+
+            UIManager.updateCurrentStatus(status);
+
+            if (status?.recommendation && status.recommendation !== '当前账户状态正常') {
+                console.log('💡 建议:', status.recommendation);
+            }
+
+        } catch (error) {
+            const handledError = ErrorHandler.handleError(error, '更新当前状态');
+            currentStatus.className = 'current-status no-account';
+            currentStatus.innerHTML = `
+                <span class="status-icon">❌</span>
+                <div class="status-title">状态错误</div>
+                <div class="status-email">加载失败</div>
+                <div class="status-userid">请重试</div>
+                <div class="status-note">${handledError.message}</div>
+            `;
+        }
+    }
+
+    static async handleRestoreCookie(storageAccount) {
+        return ErrorHandler.handleAsyncError(async () => {
+            console.log('🔧 开始恢复Cookie...', storageAccount);
+
+            const restoreBtn = document.getElementById('restoreCookieBtn');
+            if (restoreBtn) {
+                LoadingManager.show('restoreCookieBtn', '🔄 设置中...');
+            }
+
+            let accessToken = storageAccount.accessToken;
+
+            if (!accessToken || accessToken.length < 100) {
+                console.log('💡 Storage中的token不完整，尝试从原生主机获取...');
+
+                try {
+                    const nativeResult = await MessageManager.sendMessage('autoReadCursorData');
+                    if (nativeResult.success && nativeResult.data.accessToken) {
+                        accessToken = nativeResult.data.accessToken;
+                        console.log('✅ 从原生主机获取到accessToken');
+
+                        const updatedAccount = { ...storageAccount, accessToken };
+                        await chrome.storage.local.set({ currentAccount: updatedAccount });
+
+                        const accountListResult = await chrome.storage.local.get(['accountList']);
+                        const accounts = accountListResult.accountList || [];
+                        const accountIndex = accounts.findIndex(acc =>
+                            acc.email === storageAccount.email && acc.userid === storageAccount.userid
+                        );
+
+                        if (accountIndex !== -1) {
+                            accounts[accountIndex].accessToken = accessToken;
+                            await chrome.storage.local.set({ accountList: accounts });
+                        }
+                    } else {
+                        throw new Error('无法从原生主机获取accessToken');
+                    }
+                } catch (nativeError) {
+                    console.warn('⚠️ 从原生主机获取token失败:', nativeError.message);
+                    if (!accessToken) {
+                        throw new Error('无法获取有效的accessToken，请重新导入账户');
+                    }
+                }
+            }
+
+            const cookieResult = await MessageManager.sendMessage('setCookie', {
+                userid: storageAccount.userid,
+                accessToken: accessToken
+            });
+
+            if (!cookieResult.success) {
+                throw new Error(cookieResult.error || 'Cookie设置失败');
+            }
+
+            console.log('✅ Cookie设置成功');
+            UIManager.showMessage('Cookie已重新设置', 'success');
+
+            await this.updateCurrentStatus();
+
+        }, '恢复Cookie').finally(() => {
+            LoadingManager.hide('restoreCookieBtn');
+        });
+    }
+}
+
+// =============================================================================
+// 消息管理模块
+// =============================================================================
+class MessageManager {
+    static sendMessage(action, data = null) {
+        return new Promise((resolve) => {
+            // 检查Chrome API是否可用
+            if (!chrome?.runtime?.sendMessage) {
+                console.warn('⚠️ Chrome runtime API不可用，可能在测试环境中');
+                resolve({ success: false, error: '测试环境：Chrome API不可用' });
+                return;
+            }
+
+            chrome.runtime.sendMessage({ action, data }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.error('Chrome runtime error:', chrome.runtime.lastError);
+                    resolve({ success: false, error: chrome.runtime.lastError.message });
+                } else {
+                    resolve(response || { success: false, error: '无响应' });
+                }
+            });
+        });
+    }
+}
+
+// =============================================================================
+// 仪表板管理模块
+// =============================================================================
+class DashboardManager {
+    static async openDashboard() {
+        return ErrorHandler.handleAsyncError(async () => {
+            const result = await MessageManager.sendMessage('openDashboard');
+            if (result.success) {
+                UIManager.showMessage('Dashboard页面已打开', 'success');
+            } else {
+                throw new Error(result.error);
+            }
+        }, '打开Dashboard');
+    }
+}
+
+// =============================================================================
+// 应用初始化
+// =============================================================================
+class App {
+    static async initialize() {
+        console.log('🚀 页面加载完成，开始初始化...');
+
+        try {
+            // 初始化DOM元素
+            DOMManager.initialize();
+
+            // 初始化应用状态
+            await AccountManager.updateCurrentStatus();
+            await AccountManager.loadAccountList();
+
+            // 设置事件监听器
+            EventManager.setupEventListeners();
+            EventManager.setupMethodTabs();
+            FileManager.setupFileUpload();
+
+            // 标记为已初始化
+            AppState.setState({ isInitialized: true });
+
+            // 自动测试原生消息传递（仅在Chrome扩展环境中）
+            if (chrome?.runtime?.sendNativeMessage) {
+                console.log('开始自动测试原生消息传递...');
+                setTimeout(() => NativeHostManager.testConnection(), 1000);
+            } else {
+                console.log('⚠️ 非Chrome扩展环境，跳过原生消息测试');
+            }
+
+        } catch (error) {
+            ErrorHandler.handleError(error, '应用初始化');
+            UIManager.showMessage('应用初始化失败，请刷新页面重试', 'error');
+        }
+    }
+}
+
+// 初始化应用
+document.addEventListener('DOMContentLoaded', () => App.initialize());
+
+// =============================================================================
+// 事件管理模块
+// =============================================================================
+class EventManager {
+    static setupEventListeners() {
+        console.log('🔧 开始设置事件监听器...');
+
+        const elements = DOMManager.getAll();
+
+        // 基本按钮事件
+        if (elements.importDataBtn) elements.importDataBtn.addEventListener('click', () => DataImportManager.handleManualImport());
+        if (elements.autoReadBtn) elements.autoReadBtn.addEventListener('click', () => DataImportManager.handleAutoRead());
+        if (elements.processFilesBtn) elements.processFilesBtn.addEventListener('click', () => DataImportManager.handleProcessFiles());
+        if (elements.refreshAccountsBtn) elements.refreshAccountsBtn.addEventListener('click', () => AccountManager.loadAccountList());
+        if (elements.openDashboardBtn) elements.openDashboardBtn.addEventListener('click', () => DashboardManager.openDashboard());
+        if (elements.clearDataBtn) elements.clearDataBtn.addEventListener('click', () => this.handleClearData());
+        if (elements.showInstallGuide) elements.showInstallGuide.addEventListener('click', () => this.handleShowInstallGuide());
+
+        // 为账户列表设置事件代理
+        if (elements.accountList) {
+            elements.accountList.addEventListener('click', this.handleAccountListClick);
+            console.log('✅ 账户列表事件监听器已设置');
+        } else {
+            console.warn('⚠️ accountList DOM元素未找到，可能在测试环境中');
+        }
+
+        console.log('✅ 事件监听器设置完成');
+    }
+
+    static setupMethodTabs() {
+        const tabs = document.querySelectorAll('.method-tab');
+        const contents = document.querySelectorAll('.method-content');
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const method = tab.dataset.method;
+
+                // 切换标签激活状态
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                // 切换内容显示
+                contents.forEach(content => {
+                    content.classList.remove('active');
+                    if (content.id === `${method}Method`) {
+                        content.classList.add('active');
+                    }
+                });
+            });
+        });
+    }
+
+    static handleAccountListClick(event) {
+        console.log('🖱️ 账户列表点击事件:', event.target);
+
+        const target = event.target;
+        if (!target.classList.contains('btn-small')) {
+            return;
+        }
+
+        const action = target.getAttribute('data-action');
+        const index = target.getAttribute('data-index');
+
+        if (!action || index === null) {
+            console.error('❌ 按钮缺少必要的data属性');
+            return;
+        }
+
+        const accountIndex = parseInt(index);
+        if (isNaN(accountIndex)) {
+            console.error('❌ 无效的账户索引:', index);
+            return;
+        }
+
+        if (action === 'switch') {
+            AccountManager.switchToAccount(accountIndex);
+        } else if (action === 'delete') {
+            AccountManager.deleteAccount(accountIndex);
+        }
+    }
+
+    static async handleClearData() {
+        if (!confirm('确定要清空所有保存的数据吗？此操作不可恢复！')) {
+            return;
+        }
+
+        return ErrorHandler.handleAsyncError(async () => {
+            await chrome.storage.local.clear();
+            UIManager.showMessage('所有数据已清空', 'success');
+            AppState.setState({ accountList: [], currentAccount: null });
+            await AccountManager.updateCurrentStatus();
+            await AccountManager.loadAccountList();
+        }, '清空数据');
+    }
+
+    static handleShowInstallGuide() {
+        UIManager.showMessage('请参考插件文件夹中的 install-guide.md 文件获取详细安装说明', 'info');
+        chrome.tabs.create({
+            url: chrome.runtime.getURL('install-guide.md')
+        });
+    }
+}
+
+// =============================================================================
+// 文件管理模块
+// =============================================================================
+class FileManager {
+    static setupFileUpload() {
+        const elements = DOMManager.getAll();
+        const { jsonDropZone, jsonFileInput } = elements;
+
+        if (!jsonDropZone || !jsonFileInput) {
+            console.warn('⚠️ 文件上传元素未找到，可能在测试环境中');
+            return;
+        }
+
+        // 点击上传
+        jsonDropZone.addEventListener('click', () => {
+            jsonFileInput.click();
+        });
+
+        // 文件选择
+        jsonFileInput.addEventListener('change', this.handleFileSelect);
+
+        // 拖拽上传
+        jsonDropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            jsonDropZone.classList.add('dragover');
+        });
+
+        jsonDropZone.addEventListener('dragleave', () => {
+            jsonDropZone.classList.remove('dragover');
+        });
+
+        jsonDropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            jsonDropZone.classList.remove('dragover');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                this.handleFileSelect({ target: { files } });
+            }
+        });
+    }
+
+    static async handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        return ErrorHandler.handleAsyncError(async () => {
+            if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
+                throw new Error('请选择JSON文件');
+            }
+
+            UIManager.showMessage('正在处理文件...', 'loading');
+
+            const content = await this.readFile(file);
+            const result = await MessageManager.sendMessage('parseFileContent', { content, fileType: 'json' });
+
+            if (result.success) {
+                AppState.setState({ uploadedJsonData: result.data });
+
+                const jsonDropZone = DOMManager.get('jsonDropZone');
+                if (jsonDropZone) {
+                    jsonDropZone.innerHTML = `
+                        <p>✅ 文件已上传: ${file.name}</p>
+                        <p>Email: ${result.data.email}</p>
+                        <p>User ID: ${result.data.userid}</p>
+                    `;
+                }
+
+                UIManager.showMessage('JSON文件解析成功', 'success');
+            } else {
+                throw new Error(result.error);
+            }
+        }, '文件处理');
+    }
+
+    static readFile(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = () => reject(new Error('文件读取失败'));
+            reader.readAsText(file);
+        });
+    }
+}
+
+// =============================================================================
+// 数据导入管理模块
+// =============================================================================
+class DataImportManager {
+    static async handleAutoRead() {
+        const nativeHostInfo = DOMManager.get('nativeHostInfo');
+
+        return ErrorHandler.handleAsyncError(async () => {
+            LoadingManager.show('autoReadBtn', '🔍 正在读取...');
+
+            const result = await MessageManager.sendMessage('autoReadCursorData');
+
+            if (result.success) {
+                UIManager.showMessage('自动读取成功！', 'success');
+
+                const accountData = {
+                    email: result.data.email,
+                    userid: result.data.userid,
+                    accessToken: result.data.accessToken,
+                    WorkosCursorSessionToken: `${result.data.userid}%3A%3A${result.data.accessToken}`,
+                    createTime: new Date().toISOString()
+                };
+
+                await this.processAccountData(accountData);
+            } else {
+                if (result.needFileSelection) {
+                    let errorMsg = result.error || '自动读取失败';
+
+                    if (result.troubleshooting && result.troubleshooting.length > 0) {
+                        errorMsg += '\n\n📋 故障排除建议：\n' +
+                                   result.troubleshooting.map(item => `• ${item}`).join('\n');
+                    } else if (result.details) {
+                        errorMsg += `\n\n🔍 详细信息: ${result.details}`;
+                    }
+
+                    UIManager.showMessage(errorMsg, 'error');
+                    if (nativeHostInfo) nativeHostInfo.classList.remove('hidden');
+                } else {
+                    throw new Error(result.error);
+                }
+            }
+        }, '自动读取').finally(() => {
+            LoadingManager.hide('autoReadBtn');
+        });
+    }
+
+    static async handleProcessFiles() {
+        const { uploadedJsonData } = AppState.getState();
+        const accessTokenFile = DOMManager.get('accessTokenFile');
+
+        if (!uploadedJsonData) {
+            UIManager.showMessage('请先上传scope_v3.json文件', 'error');
+            return;
+        }
+
+        const accessToken = accessTokenFile?.value.trim();
+        if (!accessToken) {
+            UIManager.showMessage('请输入Access Token', 'error');
+            return;
+        }
+
+        return ErrorHandler.handleAsyncError(async () => {
+            LoadingManager.show('processFilesBtn', '📋 处理中...');
+
+            const accountData = {
+                email: uploadedJsonData.email,
+                userid: uploadedJsonData.userid,
+                accessToken: accessToken,
+                WorkosCursorSessionToken: `${uploadedJsonData.userid}%3A%3A${accessToken}`,
+                createTime: new Date().toISOString()
+            };
+
+            await this.processAccountData(accountData);
+
+            // 清空文件输入
+            if (accessTokenFile) accessTokenFile.value = '';
+            AppState.clearUploadedData();
+
+            const jsonDropZone = DOMManager.get('jsonDropZone');
+            if (jsonDropZone) {
+                jsonDropZone.innerHTML = `
+                    <p>📄 拖拽 scope_v3.json 文件到这里<br>或点击选择文件</p>
+                `;
+            }
+
+        }, '处理文件数据').finally(() => {
+            LoadingManager.hide('processFilesBtn');
+        });
+    }
+
+    static async handleManualImport() {
+        const elements = DOMManager.getAll();
+        const email = elements.emailInput?.value.trim();
+        const userid = elements.useridInput?.value.trim();
+        const accessToken = elements.accessTokenInput?.value.trim();
+
+        if (!email || !userid || !accessToken) {
+            UIManager.showMessage('请填写所有必需字段', 'error');
+            return;
+        }
+
+        // 验证email格式
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            UIManager.showMessage('请输入有效的email地址', 'error');
+            return;
+        }
+
+        return ErrorHandler.handleAsyncError(async () => {
+            LoadingManager.show('importDataBtn', '处理中...');
+
+            const accountData = {
+                email: email,
+                userid: userid,
+                accessToken: accessToken,
+                WorkosCursorSessionToken: `${userid}%3A%3A${accessToken}`,
+                createTime: new Date().toISOString()
+            };
+
+            await this.processAccountData(accountData);
+
+            // 清空输入框
+            if (elements.emailInput) elements.emailInput.value = '';
+            if (elements.useridInput) elements.useridInput.value = '';
+            if (elements.accessTokenInput) elements.accessTokenInput.value = '';
+
+        }, '手动导入').finally(() => {
+            LoadingManager.hide('importDataBtn');
+        });
+    }
+
+    static async processAccountData(accountData) {
+        // 保存到localStorage
+        const saveResult = await MessageManager.sendMessage('saveToLocalStorage', accountData);
+        if (!saveResult.success) {
+            throw new Error(saveResult.error);
+        }
+
         // 设置Cookie
-        const cookieResult = await sendMessage('setCookie', { 
-            userid: storageAccount.userid, 
-            accessToken: accessToken 
+        const cookieResult = await MessageManager.sendMessage('setCookie', {
+            userid: accountData.userid,
+            accessToken: accountData.accessToken
         });
-        
         if (!cookieResult.success) {
-            throw new Error(cookieResult.error || 'Cookie设置失败');
+            throw new Error(cookieResult.error);
         }
-        
-        console.log('✅ Cookie设置成功');
-        showMessage('Cookie已重新设置', 'success');
-        
-        // 刷新状态显示
-        await updateCurrentStatus();
-        
-    } catch (error) {
-        console.error('❌ 恢复Cookie失败:', error);
-        showMessage(`恢复Cookie失败: ${error.message}`, 'error');
-        
-        // 恢复按钮状态
-        const restoreBtn = document.getElementById('restoreCookieBtn');
-        if (restoreBtn) {
-            restoreBtn.disabled = false;
-            restoreBtn.textContent = '🔧 重新设置Cookie';
-        }
+
+        UIManager.showMessage('认证数据导入成功！', 'success');
+
+        // 更新应用状态
+        AppState.setState({ currentAccount: accountData });
+
+        // 刷新界面
+        await AccountManager.updateCurrentStatus();
+        await AccountManager.loadAccountList();
+
+        // 自动打开Dashboard
+        setTimeout(async () => {
+            await DashboardManager.openDashboard();
+        }, 1000);
     }
 }
 
-// 注意：不再需要暴露到全局作用域，因为我们使用事件监听器而不是内联onclick
+// =============================================================================
+// 调试和工具函数
+// =============================================================================
+class DebugManager {
+    static testAccountActions() {
+        console.log('🧪 测试账户操作功能...');
+        console.log('AccountManager.switchToAccount 函数:', typeof AccountManager.switchToAccount);
+        console.log('AccountManager.deleteAccount 函数:', typeof AccountManager.deleteAccount);
 
-// 手动验证账户状态
-async function handleValidateAccountStatus() {
-    try {
-        showMessage('正在验证账户状态...', 'info');
-        await updateCurrentStatus();
-        showMessage('账户状态已更新', 'success');
-    } catch (error) {
-        showMessage(`验证失败: ${error.message}`, 'error');
+        const accountList = DOMManager.get('accountList');
+        console.log('accountList DOM元素:', accountList);
+
+        if (accountList) {
+            const buttons = accountList.querySelectorAll('.btn-small');
+            console.log('找到的按钮数量:', buttons.length);
+            buttons.forEach((btn, i) => {
+                console.log(`按钮 ${i}:`, btn.textContent, btn.getAttribute('data-action'));
+            });
+        }
     }
-}
 
-// 添加测试函数
-window.testAccountActions = function() {
-    console.log('🧪 测试账户操作功能...');
-    console.log('switchToAccount 函数:', typeof switchToAccount);
-    console.log('deleteAccount 函数:', typeof deleteAccount);
-    console.log('accountList DOM元素:', accountList);
-    
-    if (accountList) {
-        const buttons = accountList.querySelectorAll('.btn-small');
-        console.log('找到的按钮数量:', buttons.length);
-        buttons.forEach((btn, i) => {
-            console.log(`按钮 ${i}:`, btn.textContent, btn.getAttribute('onclick'));
-        });
-    }
-};
+    static async debugCookieStatus() {
+        try {
+            console.log('🔬 开始调试Cookie状态...');
 
-// 移除不必要的全局暴露
+            const cookieResult = await MessageManager.sendMessage('getCurrentCookieStatus');
+            console.log('🍪 Cookie状态详情:', cookieResult);
 
-// 调试Cookie状态
-async function debugCookieStatus() {
-    try {
-        console.log('🔬 开始调试Cookie状态...');
-        
-        // 获取Cookie状态
-        const cookieResult = await sendMessage('getCurrentCookieStatus');
-        console.log('🍪 Cookie状态详情:', cookieResult);
-        
-        // 获取storage中的当前账户
-        const storageResult = await chrome.storage.local.get(['currentAccount']);
-        console.log('💾 Storage中的当前账户:', storageResult.currentAccount);
-        
-        // 显示调试信息
-        const debugInfo = `
+            const storageResult = await chrome.storage.local.get(['currentAccount']);
+            console.log('💾 Storage中的当前账户:', storageResult.currentAccount);
+
+            const debugInfo = `
 📊 Cookie调试信息:
 ─────────────────
 🍪 Cookie状态: ${cookieResult.success ? '✅ 成功' : '❌ 失败'}
@@ -992,21 +1215,31 @@ ${storageResult.currentAccount ? `
 - UserID: ${storageResult.currentAccount.userid}
 - Token长度: ${storageResult.currentAccount.accessToken ? storageResult.currentAccount.accessToken.length : 'N/A'}
 ` : '- 无当前账户'}
-        `;
-        
-        showMessage(debugInfo, 'info');
-        
-        // 也在控制台输出
-        console.log('🔬 完整调试信息:', {
-            cookieResult,
-            storageResult: storageResult.currentAccount
-        });
-        
-    } catch (error) {
-        console.error('❌ 调试Cookie状态时发生错误:', error);
-        showMessage(`调试失败: ${error.message}`, 'error');
+            `;
+
+            UIManager.showMessage(debugInfo, 'info');
+
+            console.log('🔬 完整调试信息:', {
+                cookieResult,
+                storageResult: storageResult.currentAccount
+            });
+
+        } catch (error) {
+            console.error('❌ 调试Cookie状态时发生错误:', error);
+            UIManager.showMessage(`调试失败: ${error.message}`, 'error');
+        }
     }
 }
 
-// 注意：这些函数现在通过事件监听器调用，不需要暴露到全局作用域
+// 暴露调试函数到全局作用域
+window.testAccountActions = () => DebugManager.testAccountActions();
+window.debugCookieStatus = () => DebugManager.debugCookieStatus();
+window.AppState = AppState;
+window.AccountManager = AccountManager;
+window.UIManager = UIManager;
+
+
+
+
+
 
