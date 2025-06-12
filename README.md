@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
 ![Chrome Extension](https://img.shields.io/badge/chrome-extension-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 ![License](https://img.shields.io/badge/license-MIT-orange.svg)
@@ -511,7 +511,17 @@ git push origin feature/AmazingFeature
 
 ## 📝 更新日志
 
-### v1.1.0 (最新版本)
+### v1.2.0 
+- ✅ 代码模块化重构
+- ✅ 统一错误处理
+- ✅ 加载状态管理
+- ✅ DOM管理器
+- ✅ UI管理器
+- ✅ 应用状态管理
+- ✅ 调试工具
+- ✅ 本地测试环境
+
+### v1.1.0 
 - ✅ 支持三种导入方式：自动读取、文件上传、手动输入
 - ✅ 原生主机程序支持自动读取本地文件
 - ✅ 支持多账户管理和快速切换
