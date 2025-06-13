@@ -198,26 +198,32 @@ PY
 
 ```
 cursor-client2login/
-├── 📄 manifest.json          # 插件配置文件
+├── 📄 manifest.json          # Chrome扩展配置文件
 ├── 🔧 background.js          # 后台服务脚本
 ├── 🎨 popup.html            # 弹出窗口页面
-├── ⚡ popup.js              # 弹出窗口逻辑（重构后的模块化代码）
+├── ⚡ popup.js              # 弹出窗口逻辑（模块化重构）
 ├── 📝 content.js            # 内容脚本
-├── 🐍 native_host.py        # 原生主机程序
+├── 🐍 native_host.py        # 原生主机程序（增强错误处理）
 ├── 🛠️ install_native_host.py # 原生主机安装器
 ├── 📋 native_host.json      # 原生主机配置模板
 ├── 🔄 update_native_host.py # 配置更新工具
+├── 🧪 test_manager.py       # 智能测试管理器
+├── 🔧 run_tests.sh          # 测试脚本
 ├── 🧪 test_refactored.html  # 本地测试环境页面
-├── 📊 REFACTORING_SUMMARY.md # 代码重构总结
-├── 🐛 BUG_FIXES_SUMMARY.md  # Bug修复总结
-├── ✅ OPTIMIZATION_COMPLETE.md # 优化完成报告
-└── 🔧 troubleshooting/      # 故障排除文档
-    ├── diagnose.md          # 诊断指南
-    ├── fix-steps.md         # 修复步骤
-    ├── test-results.md      # 测试结果
-    ├── wildcard-test.md     # 通配符测试
-    ├── delete-account-fix.md # 账户删除修复
-    └── cursor_auth_manage.py # 认证管理工具
+├── 📋 tests/                # 测试目录
+│   └── test_optimizations.py
+├── 📚 docs/                 # 文档中心
+│   ├── user/                # 用户文档
+│   │   ├── installation.md  # 安装指南
+│   │   └── usage.md         # 使用指南
+│   ├── developer/           # 开发者文档
+│   │   ├── architecture.md  # 项目架构
+│   │   ├── testing.md       # 测试指南
+│   │   ├── bug-fixes.md     # Bug修复记录
+│   │   └── refactoring/     # 重构文档
+│   └── troubleshooting/     # 故障排除文档
+└── 📄 assets/               # 资源文件
+    └── images/              # 图片资源
 ```
 
 ### 🏗️ 代码架构
@@ -244,6 +250,12 @@ cursor-client2login/
 
 ## 🔧 故障排除
 
+### 📚 详细文档
+- **[📦 安装指南](docs/user/installation.md)** - 完整的安装步骤和系统要求
+- **[🎯 使用指南](docs/user/usage.md)** - 三种使用方式详解
+- **[🔧 故障排除](docs/troubleshooting/)** - 常见问题和解决方案
+- **[🧪 开发测试](docs/developer/testing.md)** - 开发者测试指南
+
 ### 常见问题
 
 <details>
@@ -257,6 +269,21 @@ cursor-client2login/
    ```bash
    python3 update_native_host.py <your-extension-id>
    ```
+</details>
+
+<details>
+<summary>❌ "Chrome扩展加载失败 - __pycache__错误"</summary>
+
+**解决方案**：
+1. 使用智能测试管理器：
+   ```bash
+   python3 test_manager.py
+   ```
+2. 或手动清理：
+   ```bash
+   find . -name "__pycache__" -type d -exec rm -rf {} +
+   ```
+3. 详细解决方案请查看：[🧪 测试指南](docs/developer/testing.md)
 </details>
 
 <details>
@@ -511,7 +538,7 @@ git push origin feature/AmazingFeature
 
 ## 📝 更新日志
 
-### v1.2.0 
+### v1.2.0
 - ✅ 代码模块化重构
 - ✅ 统一错误处理
 - ✅ 加载状态管理
@@ -520,6 +547,11 @@ git push origin feature/AmazingFeature
 - ✅ 应用状态管理
 - ✅ 调试工具
 - ✅ 本地测试环境
+- ✅ 数据库连接失败处理优化
+- ✅ 文件权限检查机制
+- ✅ JSON文件错误处理增强
+- ✅ Chrome扩展兼容性问题解决
+- ✅ 测试管理器
 
 ### v1.1.0 
 - ✅ 支持三种导入方式：自动读取、文件上传、手动输入
@@ -537,7 +569,7 @@ git push origin feature/AmazingFeature
 
 | 版本 | 日期 | 关键更新 |
 |------|------|-----------|
-| 1.2.0 | 2025-06-12 | **🚀 重大重构版本**<br>1) **代码模块化重构**：将1000+行代码重构为12个功能模块<br>2) **统一错误处理**：实现智能错误分类和用户友好提示<br>3) **改进用户体验**：加载状态管理和响应式UI反馈<br>4) **本地测试环境**：提供完整的开发测试工具<br>5) **增强代码质量**：提升95%可维护性和90%用户体验<br>6) **调试工具**：丰富的调试接口和开发者工具 |
+| 1.2.0 | 2025-01-25 | **🚀 重大重构与优化版本**<br>**代码重构**：将1000+行代码重构为12个功能模块<br>**错误处理优化**：实现智能错误分类和用户友好提示<br>**数据库处理增强**：完善连接失败处理和文件权限检查<br>**Chrome兼容性**：解决__pycache__导致的扩展加载问题<br>**测试管理**：智能测试管理器和独立测试环境<br>**用户体验**：加载状态管理和响应式UI反馈 |
 | 1.1.0 | 2025-06-12 | 1) 修复CSP违规，移除内联事件处理器<br>2) manifest.json 新增 cursor.com / *.cursor.com Host 权限<br>3) 新增智能 Cookie 恢复按钮，自动从 storage 或原生主机获取 token 并重写 Cookie<br>4) 移除调试按钮，界面更简洁 |
 | 1.0.0 | 2025-06-10 | 初始版本，支持自动读取、文件上传、手动输入及多账户管理 |
 

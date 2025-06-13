@@ -28,6 +28,13 @@ temp/
 __pycache__/
 *.py[cod]
 *$py.class
+
+# 测试目录（避免Chrome扩展加载时的__pycache__问题）
+tests/
+
+# 临时文档文件
+*.tmp.md
+docs/**/*.tmp.md
 *.so
 .Python
 build/
